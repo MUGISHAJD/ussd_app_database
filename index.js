@@ -12,6 +12,10 @@ const db = mysql.createPool({
   password: process.env.DB_PASSWORD,  // Change to your DB password
   database: process.env.DB_NAME,
   port: process.env.DB_PORT    // Change to your DB name
+  ssl: {
+    ca: fs.readFileSync('./certs/isrgrootx1.pem')
+    rejectUnauthorized: true
+  }
 });
 
 // USSD logic
