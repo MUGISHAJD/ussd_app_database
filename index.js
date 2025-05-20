@@ -20,7 +20,7 @@ const db = mysql.createPool({
 });
 
 // USSD logic
-// ...existing code...
+
 
 app.post("/ussd", async (req, res) => {
   let { sessionId, phoneNumber, text } = req.body;
@@ -198,6 +198,7 @@ app.post("/ussd", async (req, res) => {
     res.send("END An error occurred");
   }
 });
+
 
 app.listen(3000, () => {
   console.log("✅ USSD Bank App with Back option running on port 3000");
