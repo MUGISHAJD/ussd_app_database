@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const mysql = require("mysql2/promise");
+const fs = require("fs");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -11,11 +12,11 @@ const db = mysql.createPool({
   user: process.env.DB_USER,      // Change to your DB user
   password: process.env.DB_PASSWORD,  // Change to your DB password
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT    // Change to your DB name
-  ssl: {
-    ca: fs.readFileSync('./certs/isrgrootx1.pem')
-    rejectUnauthorized: true
-  }
+  port: process.env.DB_PORT,    // Change to your DB name
+    ssl: {
+      rejectUnauthorized: true,
+      ca: fs.readFileSync('./certs/isrgrootx1.pem') // Optional: downloaded from TiDB Cloud
+    }
 });
 
 // USSD logic
