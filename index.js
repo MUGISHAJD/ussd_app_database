@@ -1,7 +1,3 @@
-app.get("/", (req, res) => {
-  res.send("USSD server is running.");
-});
-
 const express = require("express");
 const bodyParser = require("body-parser");
 const mysql = require("mysql2/promise");
