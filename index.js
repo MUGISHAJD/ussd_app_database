@@ -31,38 +31,51 @@ app.post("/ussd", async (req, res) => {
   const lastInput = input[input.length - 1];
 
   try {
+    // Get or initialize session
     let [rows] = await db.query("SELECT * FROM sessions WHERE sessionID = ?", [sessionId]);
     let session = rows[0];
 
     if (!session) {
-      await db.query("INSERT INTO sessions (sessionID, phoneNumber, userInput, language) VALUES (?, ?, ?, ?)", [sessionId, phoneNumber, "", null]);
+      await db.query(
+        "INSERT INTO sessions (sessionID, phoneNumber, userInput, language) VALUES (?, ?, ?, ?)",
+        [sessionId, phoneNumber, "", null]
+      );
       session = { sessionID: sessionId, phoneNumber, userInput: "", language: null };
     }
 
-    // === Handle 0 (Back) ===
+    // Handle 0 (Back)
     if (lastInput === "0" && level > 0) {
       const previousInput = input.slice(0, -1).join("*");
       req.body.text = previousInput;
       return app._router.handle(req, res, () => {});
     }
 
-    // === Level 0: Welcome ===
+    // Level 0: Welcome
     if (text === "") {
       response = `CON Welcome / Murakaza neza\n1. English\n2. Kinyarwanda\n0. Exit`;
     }
 
-    // === Language Selection ===
+    // Language selection
     else if (text === "1") {
-      await db.query("UPDATE sessions SET language = ?, userInput = ? WHERE sessionID = ?", ["en", text, sessionId]);
+      await db.query(
+        "UPDATE sessions SET language = ?, userInput = ? WHERE sessionID = ?",
+        ["en", text, sessionId]
+      );
       response = `CON Main Menu:\n1. Check Balance\n2. Transfer Funds\n3. Buy Airtime\n4. View Transactions\n0. Back`;
     } else if (text === "2") {
-      await db.query("UPDATE sessions SET language = ?, userInput = ? WHERE sessionID = ?", ["rw", text, sessionId]);
+      await db.query(
+        "UPDATE sessions SET language = ?, userInput = ? WHERE sessionID = ?",
+        ["rw", text, sessionId]
+      );
       response = `CON Menyu Nyamukuru:\n1. Reba Saldo\n2. Ohereza Amafaranga\n3. Kugura Airtime\n4. Reba Amakuru y'Imikoreshereze\n0. Subira inyuma`;
     }
 
-    // === Main Menus and Submenus ===
+    // Main Menus
     else {
-      const langRow = await db.query("SELECT language FROM sessions WHERE sessionID = ?", [sessionId]);
+      const langRow = await db.query(
+        "SELECT language FROM sessions WHERE sessionID = ?",
+        [sessionId]
+      );
       const lang = langRow[0][0]?.language;
 
       const menus = {
@@ -91,36 +104,44 @@ app.post("/ussd", async (req, res) => {
           case /^1\*2\*\d{10,}$/.test(text):
             response = `CON ${menus.en[2]}`;
             break;
-          case /^1\*2\*\d{10,}\*\d+$/.test(text):
-            {
-              const parts = text.split("*");
-              const recipient = parts[2];
-              const amount = parts[3];
-              await db.query("INSERT INTO transactions (sessionID, phoneNumber, action, amount, recipient) VALUES (?, ?, ?, ?, ?)", [sessionId, phoneNumber, "Transfer", amount, recipient]);
-              response = `END RWF ${amount} has been sent to ${recipient}`;
-            }
+          case /^1\*2\*\d{10,}\*\d+$/.test(text): {
+            const parts = text.split("*");
+            const recipient = parts[2];
+            const amount = parts[3];
+            await db.query(
+              "INSERT INTO transactions (sessionID, phoneNumber, action, amount) VALUES (?, ?, ?, ?)",
+              [sessionId, phoneNumber, "Transfer", amount]
+            );
+            response = `END RWF ${amount} has been sent to ${recipient}`;
             break;
+          }
           case /^1\*3$/.test(text):
             response = `CON ${menus.en[3]}`;
             break;
-          case /^1\*3\*\d+$/.test(text):
-            {
-              const amount = text.split("*")[2];
-              await db.query("INSERT INTO transactions (sessionID, phoneNumber, action, amount) VALUES (?, ?, ?, ?)", [sessionId, phoneNumber, "Buy Airtime", amount]);
-              response = `END You have bought airtime worth RWF ${amount}`;
+          case /^1\*3\*\d+$/.test(text): {
+            const amount = text.split("*")[2];
+            await db.query(
+              "INSERT INTO transactions (sessionID, phoneNumber, action, amount) VALUES (?, ?, ?, ?)",
+              [sessionId, phoneNumber, "Buy Airtime", amount]
+            );
+            response = `END You have bought airtime worth RWF ${amount}`;
+            break;
+          }
+          case /^1\*4$/.test(text): {
+            const [txns] = await db.query(
+              "SELECT action, amount FROM transactions WHERE sessionID = ? ORDER BY timestamp DESC LIMIT 3",
+              [sessionId]
+            );
+            if (txns.length === 0) {
+              response = `END No transactions found`;
+            } else {
+              const msg = txns
+                .map((t, i) => `${i + 1}. ${t.action} - RWF ${t.amount}`)
+                .join("\n");
+              response = `END Last 3 Transactions:\n${msg}`;
             }
             break;
-          case /^1\*4$/.test(text):
-            {
-              const [txns] = await db.query("SELECT action, amount, recipient FROM transactions WHERE sessionID = ? ORDER BY timestamp DESC LIMIT 3", [sessionId]);
-              if (txns.length === 0) {
-                response = `END No transactions found`;
-              } else {
-                const msg = txns.map((t, i) => `${i + 1}. ${t.action} - RWF ${t.amount}${t.recipient ? " to " + t.recipient : ""}`).join("\n");
-                response = `END Last 3 Transactions:\n${msg}`;
-              }
-            }
-            break;
+          }
           case /^1$/.test(text):
             response = `CON ${menus.en[0]}`;
             break;
@@ -130,7 +151,9 @@ app.post("/ussd", async (req, res) => {
           default:
             response = `END Invalid input`;
         }
-      } else if (lang === "rw") {
+      }
+
+      else if (lang === "rw") {
         switch (true) {
           case /^2\*1$/.test(text):
             response = `END Saldo yawe ni RWF 10000`;
@@ -141,36 +164,44 @@ app.post("/ussd", async (req, res) => {
           case /^2\*2\*\d{10,}$/.test(text):
             response = `CON ${menus.rw[2]}`;
             break;
-          case /^2\*2\*\d{10,}\*\d+$/.test(text):
-            {
-              const parts = text.split("*");
-              const recipient = parts[2];
-              const amount = parts[3];
-              await db.query("INSERT INTO transactions (sessionID, phoneNumber, action, amount, recipient) VALUES (?, ?, ?, ?, ?)", [sessionId, phoneNumber, "Ohereza Amafaranga", amount, recipient]);
-              response = `END RWF ${amount} woherejwe kuri ${recipient}`;
-            }
+          case /^2\*2\*\d{10,}\*\d+$/.test(text): {
+            const parts = text.split("*");
+            const recipient = parts[2];
+            const amount = parts[3];
+            await db.query(
+              "INSERT INTO transactions (sessionID, phoneNumber, action, amount) VALUES (?, ?, ?, ?)",
+              [sessionId, phoneNumber, "Ohereza Amafaranga", amount]
+            );
+            response = `END RWF ${amount} woherejwe kuri ${recipient}`;
             break;
+          }
           case /^2\*3$/.test(text):
             response = `CON ${menus.rw[3]}`;
             break;
-          case /^2\*3\*\d+$/.test(text):
-            {
-              const amount = text.split("*")[2];
-              await db.query("INSERT INTO transactions (sessionID, phoneNumber, action, amount) VALUES (?, ?, ?, ?)", [sessionId, phoneNumber, "Kugura Airtime", amount]);
-              response = `END Waguze airtime ya RWF ${amount} neza`;
+          case /^2\*3\*\d+$/.test(text): {
+            const amount = text.split("*")[2];
+            await db.query(
+              "INSERT INTO transactions (sessionID, phoneNumber, action, amount) VALUES (?, ?, ?, ?)",
+              [sessionId, phoneNumber, "Kugura Airtime", amount]
+            );
+            response = `END Waguze airtime ya RWF ${amount} neza`;
+            break;
+          }
+          case /^2\*4$/.test(text): {
+            const [txns] = await db.query(
+              "SELECT action, amount FROM transactions WHERE sessionID = ? ORDER BY timestamp DESC LIMIT 3",
+              [sessionId]
+            );
+            if (txns.length === 0) {
+              response = `END Nta makuru y'imikoreshereze abonetse`;
+            } else {
+              const msg = txns
+                .map((t, i) => `${i + 1}. ${t.action} - RWF ${t.amount}`)
+                .join("\n");
+              response = `END Imikoreshereze 3 iheruka:\n${msg}`;
             }
             break;
-          case /^2\*4$/.test(text):
-            {
-              const [txns] = await db.query("SELECT action, amount, recipient FROM transactions WHERE sessionID = ? ORDER BY timestamp DESC LIMIT 3", [sessionId]);
-              if (txns.length === 0) {
-                response = `END Nta makuru y'imikoreshereze abonetse`;
-              } else {
-                const msg = txns.map((t, i) => `${i + 1}. ${t.action} - RWF ${t.amount}${t.recipient ? " kuri " + t.recipient : ""}`).join("\n");
-                response = `END Imikoreshereze 3 iheruka:\n${msg}`;
-              }
-            }
-            break;
+          }
           case /^2$/.test(text):
             response = `CON ${menus.rw[0]}`;
             break;
@@ -180,7 +211,9 @@ app.post("/ussd", async (req, res) => {
           default:
             response = `END Igisubizo ntikiboneke. Ongera ugerageze.`;
         }
-      } else {
+      }
+
+      else {
         response = `END Invalid session`;
       }
     }
@@ -193,6 +226,7 @@ app.post("/ussd", async (req, res) => {
     res.send("END An error occurred");
   }
 });
+
 
 
 app.listen(3000, () => {
