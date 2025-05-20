@@ -7,10 +7,11 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 // DB connection
 const db = mysql.createPool({
-  host: "localhost",
-  user: "root",      // Change to your DB user
-  password: "",  // Change to your DB password
-  database: "ussd_app"     // Change to your DB name
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,      // Change to your DB user
+  password: process.env.DB_PASSWORD,  // Change to your DB password
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT    // Change to your DB name
 });
 
 // USSD logic
